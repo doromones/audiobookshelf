@@ -90,6 +90,7 @@
   "ButtonStartM4BEncode": "Start M4B Encode",
   "ButtonStartMetadataEmbed": "Start Metadata Embed",
   "ButtonStats": "Stats",
+  "LabelUploadChunked": "Upload Chunked",
   "ButtonSubmit": "Submit",
   "ButtonTest": "Test",
   "ButtonUpload": "Upload",
