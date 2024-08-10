@@ -22,8 +22,8 @@ class MiscController {
   /**
    * POST: /api/upload
    * Update library item
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   async handleUpload(req, res) {
     if (!req.user.canUpload) {
@@ -37,6 +37,9 @@ class MiscController {
 
     const files = Object.values(req.files)
     const { title, author, series, folder: folderId, library: libraryId } = req.body
+    const fileSize = Number(req.body.fileSize)
+    const start = Number(req.body.start)
+    const end = Number(req.body.end)
 
     const library = await Database.libraryModel.getOldById(libraryId)
     if (!library) {
@@ -61,20 +64,36 @@ class MiscController {
 
     await fs.ensureDir(outputDirectory)
 
-    Logger.info(`Uploading ${files.length} files to`, outputDirectory)
+    const blobFile = req.files['blob']
+    const blobFileBuffer = fs.readFileSync(blobFile.tempFilePath);
 
-    for (const file of files) {
-      const path = Path.join(outputDirectory, sanitizeFilename(file.name))
+    const filePath = Path.join(outputDirectory, sanitizeFilename(blobFile.name))
 
-      await file.mv(path)
-        .then(() => {
-          return true
-        })
-        .catch((error) => {
-          Logger.error('Failed to move file', path, error)
-          return false
-        })
+    if (start === 0) {
+      fs.writeFileSync(filePath, Buffer.alloc(fileSize, 0));
     }
+
+    console.log(`File created at ${filePath} with size ${fileSize} bytes`);
+    console.log(`Blob size ${blobFile.size}`);
+    console.log(`write start: ${start}, end: ${end}, length: ${end - start}, position: ${start}`);
+
+    fs.open(filePath, 'r+', (err, fd) => {
+      if (err) {
+        return console.error(err);
+      }
+      fs.write(fd, blobFileBuffer, 0, blobFileBuffer.size, start, (err, written, buffer) => {
+        if (err) {
+          return console.error(err);
+        }
+        console.log(`File written to ${filePath}`);
+      })
+
+      fs.close(fd, (err) => {
+        if (err) {
+          console.error('Failed to close file', err);
+        }
+      });
+    })
 
     res.sendStatus(200)
   }
@@ -82,8 +101,8 @@ class MiscController {
   /**
    * GET: /api/tasks
    * Get tasks for task manager
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   getTasks(req, res) {
     const includeArray = (req.query.include || '').split(',')
@@ -104,9 +123,9 @@ class MiscController {
   /**
    * PATCH: /api/settings
    * Update server settings
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   async updateServerSettings(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -135,9 +154,9 @@ class MiscController {
 
   /**
    * PATCH: /api/sorting-prefixes
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   async updateSortingPrefixes(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -233,9 +252,9 @@ class MiscController {
   /**
    * POST: /api/authorize
    * Used to authorize an API token
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   async authorize(req, res) {
     if (!req.user) {
@@ -249,8 +268,8 @@ class MiscController {
   /**
    * GET: /api/tags
    * Get all tags
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   async getAllTags(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -292,8 +311,8 @@ class MiscController {
    * POST: /api/tags/rename
    * Rename tag
    * Req.body { tag, newTag }
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   async renameTag(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -346,8 +365,8 @@ class MiscController {
    * DELETE: /api/tags/:tag
    * Remove a tag
    * :tag param is base64 encoded
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   async deleteTag(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -385,8 +404,8 @@ class MiscController {
   /**
    * GET: /api/genres
    * Get all genres
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   async getAllGenres(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -427,8 +446,8 @@ class MiscController {
    * POST: /api/genres/rename
    * Rename genres
    * Req.body { genre, newGenre }
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   async renameGenre(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -481,8 +500,8 @@ class MiscController {
    * DELETE: /api/genres/:genre
    * Remove a genre
    * :genre param is base64 encoded
-   * @param {*} req 
-   * @param {*} res 
+   * @param {*} req
+   * @param {*} res
    */
   async deleteGenre(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -520,13 +539,13 @@ class MiscController {
   /**
    * POST: /api/watcher/update
    * Update a watch path
-   * Req.body { libraryId, path, type, [oldPath] } 
+   * Req.body { libraryId, path, type, [oldPath] }
    * type = add, unlink, rename
    * oldPath = required only for rename
    * @this import('../routers/ApiRouter')
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   updateWatchedPath(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -582,9 +601,9 @@ class MiscController {
 
   /**
    * GET: api/auth-settings (admin only)
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   getAuthSettings(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -597,9 +616,9 @@ class MiscController {
   /**
    * PATCH: api/auth-settings
    * @this import('../routers/ApiRouter')
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   async updateAuthSettings(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -704,9 +723,9 @@ class MiscController {
 
   /**
    * GET: /api/stats/year/:year
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   async getAdminStatsForYear(req, res) {
     if (!req.user.isAdminOrUp) {
@@ -725,9 +744,9 @@ class MiscController {
   /**
    * GET: /api/logger-data
    * admin or up
-   * 
-   * @param {import('express').Request} req 
-   * @param {import('express').Response} res 
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
    */
   async getLoggerData(req, res) {
     if (!req.user.isAdminOrUp) {

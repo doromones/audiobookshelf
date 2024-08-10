@@ -78,7 +78,7 @@
       <cards-item-upload-card v-for="item in items" :key="item.index" :ref="`itemCard-${item.index}`" :media-type="selectedLibraryMediaType" :item="item" :provider="fetchMetadata.provider" :processing="processing" @remove="removeItem(item)" />
 
       <!-- Upload/Reset btns -->
-      <div v-show="items.length" class="flex justify-end pb-8 pt-4">
+      <div v-show="items.length" class="flex justify-end items-center pb-8 pt-4">
         <ui-btn v-if="!uploadFinished" color="success" :loading="processing" @click="submit">{{ $strings.ButtonUpload }}</ui-btn>
         <ui-btn v-else @click="reset">{{ $strings.ButtonReset }}</ui-btn>
       </div>
@@ -295,29 +295,58 @@ export default {
       }
     },
     async uploadItem(item) {
-      var form = new FormData()
+      // upload files
+      for (let i = 0; i < item.files.length; i++) {
+        const file = item.files[i]
+        const success = await this.uploadItemFile(item, file)
+
+        if (!success) {
+          return false
+        }
+      }
+      return true
+    },
+    async uploadItemFile(item, file){
+      const form = new FormData()
+      const blob = new Blob([file])
+
+      const fileSize = file.size
+      let start = 0
+      let step = 1024 * 1024 * 50 // 50MB
+
       form.set('title', item.title)
+      form.set('library', this.selectedLibraryId)
+      form.set('folder', this.selectedFolderId)
+      form.set('fileSize', fileSize)
+
       if (!this.selectedLibraryIsPodcast) {
         form.set('author', item.author || '')
         form.set('series', item.series || '')
       }
-      form.set('library', this.selectedLibraryId)
-      form.set('folder', this.selectedFolderId)
 
-      var index = 0
-      item.files.forEach((file) => {
-        form.set(`${index++}`, file)
-      })
+      while (start < fileSize) {
+        let end = Math.min(fileSize, start + step)
 
-      return this.$axios
-        .$post('/api/upload', form)
-        .then(() => true)
-        .catch((error) => {
-          console.error('Failed', error)
-          var errorMessage = error.response && error.response.data ? error.response.data : 'Oops, something went wrong...'
-          this.$toast.error(errorMessage)
-          return false
-        })
+        form.set('start', start)
+        form.set('end', end)
+        form.set('blob', blob.slice(start, end), file.name)
+
+        console.log('Uploading', file.name, start, end)
+
+        await this.$axios
+          .$post(`/api/upload`, form)
+          .then(() => true)
+          .catch((error) => {
+            console.error('Failed', error)
+            const errorMessage = error.response && error.response.data ? error.response.data : 'Oops, something went wrong...'
+            this.$toast.error(errorMessage)
+            return false
+          })
+
+        start = end
+      }
+
+      return true
     },
     validateItems() {
       var itemData = []
